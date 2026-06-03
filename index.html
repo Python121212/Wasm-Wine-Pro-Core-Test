@@ -6,88 +6,52 @@
     <title>WasmWine PoC</title>
     <link rel="manifest" href="manifest.json">
     <style>
-        body { 
-            background: #121212; 
-            color: #00ff00; 
-            font-family: monospace; 
-            padding: 20px; 
-            margin: 0; 
-            box-sizing: border-box;
-        }
-        h2 {
-            margin-top: 0;
-            font-size: 1.5rem;
-        }
-        #console { 
-            background: #000; 
-            border: 1px solid #333; 
-            height: 350px; 
-            padding: 15px; 
-            overflow-y: auto; 
-            white-space: pre-wrap; 
-            margin-bottom: 20px;
-            border-radius: 4px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        button { 
-            background: #00ff00; 
-            color: #000; 
-            border: none; 
-            padding: 18px 30px; 
-            font-weight: bold; 
-            font-size: 16px; 
-            cursor: pointer; 
-            width: 100%; 
-            border-radius: 5px;
-            transition: background 0.2s;
-        }
-        button:disabled {
-            background: #333;
-            color: #777;
-            cursor: not-allowed;
-        }
+        body { background: #121212; color: #00ff00; font-family: monospace; padding: 20px; margin: 0; box-sizing: border-box; }
+        h2 { margin-top: 0; font-size: 1.5rem; }
+        #console { background: #000; border: 1px solid #333; height: 350px; padding: 15px; overflow-y: auto; white-space: pre-wrap; margin-bottom: 20px; border-radius: 4px; font-size: 14px; line-height: 1.4; }
+        button { background: #00ff00; color: #000; border: none; padding: 18px 30px; font-weight: bold; font-size: 16px; cursor: pointer; width: 100%; border-radius: 5px; transition: background 0.2s; }
+        button:disabled { background: #333; color: #777; cursor: not-allowed; }
     </style>
 </head>
 <body>
-    <h2>🚀 WasmWine 超高速同期テスト基盤</h2>
+    <h2>🚀 WasmWine 100% PWA同期基盤</h2>
     <div id="console">Initializing...</div>
     <button id="startButton" disabled>エミュレータ実行（JIT+OPFS同期）</button>
 
     <script>
         const logDiv = document.getElementById("console");
-        function log(msg) { 
-            logDiv.innerText += `\n${msg}`; 
-            logDiv.scrollTop = logDiv.scrollHeight; 
-        }
+        function log(msg) { logDiv.innerText += `\n${msg}`; logDiv.scrollTop = logDiv.scrollHeight; }
 
-        // 1. Service Workerの自己偽装登録
+        let deferredPrompt;
+
+        // 1. PWAインストール勧誘イベントのキャッチ（これが発火すればPWA化成功の証拠）
+        window.addEventListener("beforeinstallprompt", (e) => {
+            e.preventDefault();
+            deferredPrompt = e.next ? e : null; // 2026年現在のモダンブラウザ対応互換
+            log("🌟 PWA認定成功！端末へのインストールが可能です。");
+        });
+
+        // 2. Service Worker（キャッシュ対応版）の登録
         if ("serviceWorker" in navigator) {
             navigator.serviceWorker.register("sw.js").then((reg) => {
-                log("ℹ️ Service Worker 登録完了");
-                reg.addEventListener("updatefound", () => {
-                    const newWorker = reg.installing;
-                    newWorker.addEventListener("statechange", () => {
-                        if (newWorker.state === "activated") {
-                            log("🔄 偽装ヘッダー有効化のため自動リロードします...");
-                            window.location.reload();
-                        }
-                    });
-                });
-            }).catch(err => {
-                log("❌ Service Worker 登録失敗: " + err);
-            });
+                log("ℹ️ PWA対応 Service Worker 登録完了");
+                
+                // コントロール下のページがアップデートされた場合の自動リロード
+                if (navigator.serviceWorker.controller === null) {
+                    log("🔄 初回起動：環境をアクティベートするため自動リロードします...");
+                    window.location.reload();
+                }
+            }).catch(err => log("❌ SW登録失敗: " + err));
         }
 
-        // 2. 起動時の環境チェック（ここではまだ永続化要求はしない）
+        // 3. 環境チェック
         window.addEventListener("load", async () => {
             if (typeof SharedArrayBuffer === "undefined") {
-                log("❌ エラー: SharedArrayBuffer が無効です！ヘッダーの自己偽装、またはvercel.jsonの設定が反映されていません。");
+                log("❌ エラー: SharedArrayBuffer が無効です。ページを一度手動リロードしてください。");
                 return;
             }
             log("✅ SharedArrayBuffer 解放成功！");
 
-            // 現在のクォータ（利用可能容量）の目安だけ事前確認
             if (navigator.storage && navigator.storage.estimate) {
                 const estimate = await navigator.storage.estimate();
                 const availableGB = (estimate.quota / (1024 * 1024 * 1024)).toFixed(2);
@@ -97,32 +61,27 @@
             document.getElementById("startButton").disabled = false;
         });
 
-        // 3. 実行トリガー（ユーザーのアクション起点）
+        // 4. 実行＆ストレージ永続化要求
         document.getElementById("startButton").addEventListener("click", async () => {
-            log("\n🏁 エミュレータスレッドの起動シークエンス開始...");
+            log("\n🏁 エミュレータスレッド起動シークエンス...");
             
-            // 🔥 【対策】ユーザーがボタンをクリックしたこの瞬間にストレージの永続化を要求
             if (navigator.storage && navigator.storage.persist) {
-                log("🔒 ストレージの永続化要求（persist）を送信中...");
+                log("🔒 ストレージ永続化（persist）を要請中...");
                 const granted = await navigator.storage.persist();
                 
                 if (granted) {
-                    log("🎯 🔒 ストレージの永続化：承認成功！（OSによる自動削除から保護されました）");
+                    log("🎯 🔒 永続化成功！OSによる自動クリーンアップから完全保護されました。");
                 } else {
-                    log("⚠️ 🔒 ストレージの永続化：拒否（PWAとしてホーム画面から起動するか、サイトとのインタラクションを増やしてください。※OPFS自体は制限付きで動作します）");
+                    log("⚠️ 🔒 永続化拒否。ブラウザメニューから「ホーム画面に追加（インストール）」した後に再度このボタンを押してください。");
                 }
             }
 
-            // 共有メモリとWasmTableの生成
             const sharedBuffer = new SharedArrayBuffer(1024);
             const wasmTable = new WebAssembly.Table({ initial: 100, element: "anyfunc" });
 
-            // 各種 Worker の生成
-            log("⚙️ メインWorker と JITWorker をスピンアップします...");
             const mainWorker = new Worker("main-worker.js");
             const jitWorker = new Worker("jit-worker.js");
 
-            // メモリ空間とテーブルの共有
             mainWorker.postMessage({ sharedBuffer, wasmTable });
             jitWorker.postMessage({ sharedBuffer, wasmTable });
         });
