@@ -2,7 +2,17 @@
   "short_name": "WasmWine",
   "name": "Wasm Wine Pro Emulator",
   "icons": [
-    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" }
+    {
+      "src": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3ae.png",
+      "type": "image/png",
+      "sizes": "72x72"
+    },
+    {
+      "src": "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/512x512/1f3ae.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
   ],
   "start_url": "./index.html",
   "background_color": "#121212",
