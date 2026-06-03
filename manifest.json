@@ -1,0 +1,12 @@
+{
+  "short_name": "WasmWine",
+  "name": "Wasm Wine Pro Emulator",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "display": "standalone",
+  "orientation": "landscape"
+}
