@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WasmWine PoC</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body { background: #121212; color: #00ff00; font-family: monospace; padding: 20px; margin: 0; }
+        #console { background: #000; border: 1px solid #333; height: 300px; padding: 10px; overflow-y: scroll; white-space: pre-wrap; margin-bottom: 20px; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px 30px; font-weight: bold; font-size: 16px; cursor: pointer; width: 100%; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h2>🚀 WasmWine 超高速同期テスト基盤</h2>
+    <div id="console">Initializing...</div>
+    <button id="startButton" disabled>エミュレータ実行（JIT+OPFS同期）</button>
+
+    <script>
+        const logDiv = document.getElementById("console");
+        function log(msg) { logDiv.innerText += `\n${msg}`; logDiv.scrollTop = logDiv.scrollHeight; }
+
+        // 1. Service Workerの自己偽装登録
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("sw.js").then((reg) => {
+                log("ℹ️ Service Worker 登録完了");
+                reg.addEventListener("updatefound", () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener("statechange", () => {
+                        if (newWorker.state === "activated") {
+                            log("🔄 偽装ヘッダー有効化のためリロードします...");
+                            window.location.reload();
+                        }
+                    });
+                });
+            });
+        }
+
+        // 2. 初期化チェック
+        window.addEventListener("load", async () => {
+            if (typeof SharedArrayBuffer === "undefined") {
+                log("❌ エラー: SharedArrayBuffer が無効です！ヘッダー設定が失敗しています。");
+                return;
+            }
+            log("✅ SharedArrayBuffer 解放成功！");
+
+            if (navigator.storage && navigator.storage.persist) {
+                const granted = await navigator.storage.persist();
+                log(granted ? "🔒 ストレージの永続化：承認" : "⚠️ ストレージの永続化：拒否");
+            }
+
+            document.getElementById("startButton").disabled = false;
+        });
+
+        // 3. 実行トリガー
+        document.getElementById("startButton").addEventListener("click", () => {
+            log("\n🏁 エミュレータスレッドを起動します...");
+            
+            // 共有メモリとWasmTableの生成
+            const sharedBuffer = new SharedArrayBuffer(1024);
+            const wasmTable = new WebAssembly.Table({ initial: 100, element: "anyfunc" });
+
+            const mainWorker = new Worker("main-worker.js");
+            const jitWorker = new Worker("jit-worker.js");
+
+            // 通信チャネルのブリッジ
+            mainWorker.postMessage({ sharedBuffer, wasmTable });
+            jitWorker.postMessage({ sharedBuffer, wasmTable });
+        });
+    </script>
+</body>
+</html>
